@@ -1,0 +1,6 @@
+{
+  "name": "TabAudit",
+  "description": "AI-powered browser tab organizer that works silently, suggests smartly, and never interrupts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
