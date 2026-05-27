@@ -463,11 +463,21 @@ Rules for analysis:
           const validColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
           const targetCol = validColors.includes(suggested.color) ? suggested.color : 'purple';
           
-          chrome.tabs.group({ tabIds: activeIds }, (chromeGroupId) => {
-            if (chrome.tabGroups?.update) {
-              chrome.tabGroups.update(chromeGroupId, { title: suggested.name, color: targetCol as any });
-            }
-          });
+          if (chrome.tabs.move) {
+            chrome.tabs.move(activeIds, { index: -1 }, () => {
+              chrome.tabs.group({ tabIds: activeIds }, (chromeGroupId) => {
+                if (chrome.tabGroups?.update) {
+                  chrome.tabGroups.update(chromeGroupId, { title: suggested.name, color: targetCol as any });
+                }
+              });
+            });
+          } else {
+            chrome.tabs.group({ tabIds: activeIds }, (chromeGroupId) => {
+              if (chrome.tabGroups?.update) {
+                chrome.tabGroups.update(chromeGroupId, { title: suggested.name, color: targetCol as any });
+              }
+            });
+          }
         }
       }
     }
@@ -596,18 +606,35 @@ Rules for analysis:
         }
 
         if (restoredIds.length > 0 && chrome.tabs.group) {
-          chrome.tabs.group({ tabIds: restoredIds }, (newNativeGroupId) => {
-            if (chrome.tabGroups?.update) {
-              const validColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
-              const originalColor = session.color || 'purple';
-              const targetCol = validColors.includes(originalColor) ? originalColor : 'purple';
-              chrome.tabGroups.update(newNativeGroupId, { title: session.name, color: targetCol as any }, () => {
-                completeRestoringStorage(session, newNativeGroupId, restoredIds);
+          if (chrome.tabs.move) {
+            chrome.tabs.move(restoredIds, { index: -1 }, () => {
+              chrome.tabs.group({ tabIds: restoredIds }, (newNativeGroupId) => {
+                if (chrome.tabGroups?.update) {
+                  const validColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+                  const originalColor = session.color || 'purple';
+                  const targetCol = validColors.includes(originalColor) ? originalColor : 'purple';
+                  chrome.tabGroups.update(newNativeGroupId, { title: session.name, color: targetCol as any }, () => {
+                    completeRestoringStorage(session, newNativeGroupId, restoredIds);
+                  });
+                } else {
+                  completeRestoringStorage(session, newNativeGroupId, restoredIds);
+                }
               });
-            } else {
-              completeRestoringStorage(session, newNativeGroupId, restoredIds);
-            }
-          });
+            });
+          } else {
+            chrome.tabs.group({ tabIds: restoredIds }, (newNativeGroupId) => {
+              if (chrome.tabGroups?.update) {
+                const validColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+                const originalColor = session.color || 'purple';
+                const targetCol = validColors.includes(originalColor) ? originalColor : 'purple';
+                chrome.tabGroups.update(newNativeGroupId, { title: session.name, color: targetCol as any }, () => {
+                  completeRestoringStorage(session, newNativeGroupId, restoredIds);
+                });
+              } else {
+                completeRestoringStorage(session, newNativeGroupId, restoredIds);
+              }
+            });
+          }
         } else {
           completeRestoringStorage(session, undefined, []);
         }
@@ -1051,10 +1078,49 @@ Rules for analysis:
 
         {/* Segmented heat map */}
         <div className="h-1.5 w-full bg-[#07080B] rounded-full overflow-hidden flex mb-3 border border-white/[0.04]">
-          <div className="h-full bg-[#10B981] transition-all" style={{ width: `${tabs.length > 0 ? (activeCount / tabs.length) * 100 : 0}%` }} title={`Active: ${activeCount}`} />
-          <div className="h-full bg-[#3B82F6] transition-all" style={{ width: `${tabs.length > 0 ? (warmCount / tabs.length) * 100 : 0}%` }} title={`Warm: ${warmCount}`} />
-          <div className="h-full bg-[#F59E0B] transition-all" style={{ width: `${tabs.length > 0 ? (staleCount / tabs.length) * 100 : 0}%` }} title={`Stale: ${staleCount}`} />
-          <div className="h-full bg-[#EF4444] transition-all" style={{ width: `${tabs.length > 0 ? (deadCount / tabs.length) * 100 : 0}%` }} title={`Discard Candidate: ${deadCount}`} />
+          <div className="h-full bg-[#22C55E] transition-all" style={{ width: `${tabs.length > 0 ? (activeCount / tabs.length) * 100 : 0}%` }} title={`Active: ${activeCount}`} />
+          <div className="h-full bg-[#EAB308] transition-all" style={{ width: `${tabs.length > 0 ? (warmCount / tabs.length) * 100 : 0}%` }} title={`Warm: ${warmCount}`} />
+          <div className="h-full bg-[#F97316] transition-all" style={{ width: `${tabs.length > 0 ? (staleCount / tabs.length) * 100 : 0}%` }} title={`Stale: ${staleCount}`} />
+          <div className="h-full bg-[#EF4444] transition-all" style={{ width: `${tabs.length > 0 ? (deadCount / tabs.length) * 100 : 0}%` }} title={`Dead Weight: ${deadCount}`} />
+        </div>
+
+        {/* Typographic Information Legend and Metric Glossary */}
+        <div className="flex items-center justify-between text-[8px] mb-3.5 text-[#94A3B8] border-b border-white/[0.02] pb-2 relative">
+          <div className="relative group flex items-center gap-1 cursor-help">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E]" />
+            <span className="uppercase tracking-wider hover:text-white transition-colors">Active ({activeCount})</span>
+            <div className="absolute bottom-full left-0 mb-2 invisible opacity-0 scale-95 group-hover:visible group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 bg-[#12131A] text-[#94A3B8] border border-white/[0.08] text-[9.5px] p-2.5 rounded-lg w-52 shadow-2xl z-50 pointer-events-none normal-case leading-normal font-sans">
+              <span className="text-[#22C55E] font-semibold font-mono text-[10px] block mb-1">Active (Score 0-20)</span>
+              High-priority tab accessed within the last few minutes. This is heavily protected.
+            </div>
+          </div>
+
+          <div className="relative group flex items-center gap-1 cursor-help">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#EAB308]" />
+            <span className="uppercase tracking-wider hover:text-white transition-colors">Warm ({warmCount})</span>
+            <div className="absolute bottom-full left-1/2 -translate-x-1/3 mb-2 invisible opacity-0 scale-95 group-hover:visible group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 bg-[#12131A] text-[#94A3B8] border border-white/[0.08] text-[9.5px] p-2.5 rounded-lg w-52 shadow-2xl z-50 pointer-events-none normal-case leading-normal font-sans">
+              <span className="text-[#EAB308] font-semibold font-mono text-[10px] block mb-1">Warm (Score 21-45)</span>
+              Idle for up to 30 minutes; beginning to sit low in browser focus hierarchy.
+            </div>
+          </div>
+
+          <div className="relative group flex items-center gap-1 cursor-help">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" />
+            <span className="uppercase tracking-wider hover:text-white transition-colors">Stale ({staleCount})</span>
+            <div className="absolute bottom-full right-0 mb-2 invisible opacity-0 scale-95 group-hover:visible group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 bg-[#12131A] text-[#94A3B8] border border-white/[0.08] text-[9.5px] p-2.5 rounded-lg w-52 shadow-2xl z-50 pointer-events-none normal-case leading-normal font-sans">
+              <span className="text-[#F97316] font-semibold font-mono text-[10px] block mb-1">Stale (Score 46-70)</span>
+              Unused for over an hour or buried deep down the tab index layout.
+            </div>
+          </div>
+
+          <div className="relative group flex items-center gap-1 cursor-help">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444]" />
+            <span className="uppercase tracking-wider hover:text-white transition-colors">Dead ({deadCount})</span>
+            <div className="absolute bottom-full right-0 mb-2 invisible opacity-0 scale-95 group-hover:visible group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 bg-[#12131A] text-[#94A3B8] border border-white/[0.08] text-[9.5px] p-2.5 rounded-lg w-[220px] shadow-2xl z-50 pointer-events-none normal-case leading-normal font-sans">
+              <span className="text-[#EF4444] font-semibold font-mono text-[10px] block mb-1">Dead Weight (Score 71+)</span>
+              Dormant for more than 2 hours. These tabs are primary targets to be automatically unloaded to 0 MB of RAM when Aggressive Standby Saver is active.
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center justify-between text-[9px] text-[#475569]">
