@@ -4,13 +4,13 @@ TabAudit is a background-first, suggestion-driven tab manager that works silentl
 
 ---
 
-## 🎨 Design Philosophy — The "Sleek Interface" Theme
+## 🚀 Key Features
 
-TabAudit centers its layout on visual rhythm, extreme readability, and non-blocking interactions:
-- **Minimal Twilight Dark Mode**: Styled using a premium off-dark canvas (`#0F1117`) and card surfaces (`#1A1D2E`) designed to minimize eye fatigue during late-night programming sessions.
-- **AI-Sourced violet Theme (`#8B5CF6`)**: Distinguishes intelligent recommendations from standard manual actions.
-- **Electric Teal Accents (`#00D4C8`)**: Highlights active links, focus metrics, and primary save controls.
-- **Passive Feedback Indicators**: Displays colored status pills (`Active`, `Warm`, `Stale`, `Dead Weight`) passively.
+1. **Popup-Open AI Audit**: Analysis runs immediately when you open the popup (with a 2-minute cache rule to prevent API spamming). It suggests context groups and identifies stale browser tabs.
+2. **Single-Click Grouping & Merging**: Accepts AI suggestions instantly with a single click.
+3. **Passive Stale Score System**: Ranks each tab from `0–100` dynamically using duration inactive + tab position index.
+4. **Reversible Group Freezing**: Serializes full sets of links, shuts down active tabs to free up RAM, and keeps them safe inside your local frozen session shelf. If you change your mind, a **10-second interactive Undo Toast** is displayed to instantly restore everything.
+5. **No Background Interruptions**: No periodic background trackers, no system notifications, no badges, and no RAM leaks while browsing.
 
 ---
 
@@ -24,17 +24,7 @@ TabAudit's recommendation intelligence operates securely via the fast `gemini-3.
    ```env
    GEMINI_API_KEY="your-gemini-key"
    ```
-
----
-
-## 🚀 Key Features
-
-1. **Popup-Open AI Audit**: Analysis runs immediately when you open the popup (with a 2-minute cache rule to prevent API spamming). It suggests context groups and identifies stale browser tabs.
-2. **Single-Click Grouping & Merging**: Accepts AI suggestions instantly with a single click.
-3. **Passive Stale Score System**: Ranks each tab from `0–100` dynamically using duration inactive + tab position index.
-4. **Reversible Group Freezing**: Serializes full sets of links, shuts down active tabs to free up RAM, and keeps them safe inside your local frozen session shelf. If you change your mind, a **10-second interactive Undo Toast** is displayed to instantly restore everything.
-5. **No Background Interruptions**: No periodic background trackers, no system notifications, no badges, and no RAM leaks while browsing.
-
+   
 ---
 
 ## 📦 Manual Installation in Chrome (Unpacked Extension)
