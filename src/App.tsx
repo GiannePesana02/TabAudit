@@ -67,13 +67,13 @@ export default function App() {
   const isExtension = typeof chrome !== 'undefined' && chrome.tabs && chrome.storage && chrome.storage.local;
 
   const groupColors = [
-    { name: 'blue', hex: '#3B82F6', fontColor: 'text-blue-400', bannerBg: 'bg-blue-500/10', borderStyle: 'border-blue-500/20' },
-    { name: 'green', hex: '#10B981', fontColor: 'text-green-400', bannerBg: 'bg-green-500/10', borderStyle: 'border-green-500/20' },
-    { name: 'red', hex: '#EF4444', fontColor: 'text-rose-400', bannerBg: 'bg-rose-500/10', borderStyle: 'border-rose-500/20' },
-    { name: 'yellow', hex: '#F59E0B', fontColor: 'text-amber-400', bannerBg: 'bg-amber-500/10', borderStyle: 'border-amber-500/20' },
-    { name: 'purple', hex: '#8B5CF6', fontColor: 'text-purple-400', bannerBg: 'bg-purple-500/10', borderStyle: 'border-[#8B5CF6]/20' },
-    { name: 'pink', hex: '#EC4899', fontColor: 'text-pink-400', bannerBg: 'bg-pink-500/10', borderStyle: 'border-pink-500/20' },
-    { name: 'cyan', hex: '#06B6D4', fontColor: 'text-cyan-400', bannerBg: 'bg-cyan-500/10', borderStyle: 'border-cyan-500/20' }
+    { name: 'blue', hex: '#60A5FA', fontColor: 'text-blue-400', bannerBg: 'bg-blue-500/10', borderStyle: 'border-blue-500/15' },
+    { name: 'green', hex: '#34D399', fontColor: 'text-emerald-400', bannerBg: 'bg-emerald-500/10', borderStyle: 'border-emerald-500/15' },
+    { name: 'red', hex: '#F87171', fontColor: 'text-rose-400', bannerBg: 'bg-rose-500/10', borderStyle: 'border-rose-500/15' },
+    { name: 'yellow', hex: '#FBBF24', fontColor: 'text-amber-400', bannerBg: 'bg-amber-500/10', borderStyle: 'border-amber-500/15' },
+    { name: 'purple', hex: '#A78BFA', fontColor: 'text-violet-400', bannerBg: 'bg-violet-500/10', borderStyle: 'border-violet-500/15' },
+    { name: 'pink', hex: '#F472B6', fontColor: 'text-pink-400', bannerBg: 'bg-pink-500/10', borderStyle: 'border-pink-500/15' },
+    { name: 'cyan', hex: '#22D3EE', fontColor: 'text-cyan-400', bannerBg: 'bg-cyan-500/10', borderStyle: 'border-cyan-500/15' }
   ];
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export default function App() {
   useEffect(() => {
     if (isExtension) {
       chrome.action?.setBadgeText?.({ text: String(tabs.length) });
-      chrome.action?.setBadgeBackgroundColor?.({ color: '#8B5CF6' });
+      chrome.action?.setBadgeBackgroundColor?.({ color: '#6366F1' });
     }
   }, [tabs]);
 
@@ -182,15 +182,12 @@ export default function App() {
     }
   };
 
-  // Keywordless Fallback Semantic Clustering heuristic (domain matching)
   const runSmartGroupingHeuristicsLongfall = (): GeminiSuggestions => {
     const suggested: SuggestedGroup[] = [];
     const ungrouped: number[] = [];
 
-    // Completely ignore tabs that already have a native groupId or are already in a state group
     const tabsWithoutGroup = tabs.filter(t => t.groupId === undefined && !groups.some(g => g.tabIds.includes(t.id)));
 
-    // Group by hostname / brand
     const domainGroups: Record<string, Tab[]> = {};
     tabsWithoutGroup.forEach(tab => {
       try {
@@ -244,14 +241,12 @@ export default function App() {
 
     const apiKeyToUse = settings.geminiApiKey || '';
 
-    // If an API key is present: send live request directly to Gemini client-side
     if (apiKeyToUse.trim()) {
       try {
         const ai = new GoogleGenAI({
           apiKey: apiKeyToUse
         });
 
-        // Filter out any tabs that already have a native groupId assigned (i.e., t.groupId !== undefined) or are in a state group
         const looseTabsOnly = tabs.filter(t => t.groupId === undefined && !groups.some(g => g.tabIds.includes(t.id)));
         const tabSummary = looseTabsOnly.map((t) => ({
           id: t.id,
@@ -341,7 +336,6 @@ Rules for analysis:
         setAnalyzing(false);
       }
     } else {
-      // Offline/Keywordless heuristic fallback immediately
       await new Promise(r => setTimeout(r, 650));
       const fallbackResults = runSmartGroupingHeuristicsLongfall();
       await applySmartAuditResults(fallbackResults);
@@ -351,8 +345,8 @@ Rules for analysis:
 
   const applySmartAuditResults = async (results: GeminiSuggestions) => {
     if (!results || !results.suggestedGroups || results.suggestedGroups.length === 0) {
-      setInfoMessage('✓ Static scan: tabs are currently categorized.');
-      setTimeout(() => setInfoMessage(null), 3000);
+      setInfoMessage('Scan finished: no new workspace structures recommended.');
+      setTimeout(() => setInfoMessage(null), 3500);
       return;
     }
 
@@ -361,7 +355,6 @@ Rules for analysis:
     for (const suggested of results.suggestedGroups) {
       const activeIds = suggested.tabIds.filter(id => tabs.some(t => t.id === id));
       if (activeIds.length >= 2) {
-        // Filter out from older groups
         updatedGroups = updatedGroups.map(g => ({
           ...g,
           tabIds: g.tabIds.filter(id => !activeIds.includes(id))
@@ -375,7 +368,6 @@ Rules for analysis:
           tabIds: activeIds
         });
 
-        // Physically create Chrome native groups if in real extension
         if (isExtension && chrome.tabs.group) {
           const validColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
           const targetCol = validColors.includes(suggested.color) ? suggested.color : 'purple';
@@ -392,7 +384,7 @@ Rules for analysis:
     updatedGroups = updatedGroups.filter(g => g.tabIds.length > 0);
     setGroups(updatedGroups);
     await saveToStorage('groups', updatedGroups);
-    setInfoMessage(`✦ Successfully auto-grouped matching clusters!`);
+    setInfoMessage(`✦ Successfully clustered tabs into active workspaces!`);
     setTimeout(() => setInfoMessage(null), 3500);
     await refreshAllData();
   };
@@ -414,7 +406,6 @@ Rules for analysis:
       const updatedMock = tabs.filter(t => t.id !== tabId);
       localStorage.setItem('tabaudit_mock_tabs', JSON.stringify(updatedMock));
 
-      // Clean group membership
       const updatedGroups = groups.map(g => ({
         ...g,
         tabIds: g.tabIds.filter(id => id !== tabId)
@@ -426,7 +417,6 @@ Rules for analysis:
     await refreshAllData();
   };
 
-  // Snooze active workspaces (serialize, freeze, and physically close tabs to free RAM)
   const handleSleepGroup = async (group: Group) => {
     const tabsToSnooze = tabs.filter(t => group.tabIds.includes(t.id));
     if (tabsToSnooze.length === 0) return;
@@ -447,12 +437,10 @@ Rules for analysis:
     setFrozenSessions(updatedFrozen);
     await saveToStorage('frozenSessions', updatedFrozen);
 
-    // Remove group
     const updatedGroups = groups.filter(g => g.id !== group.id);
     setGroups(updatedGroups);
     await saveToStorage('groups', updatedGroups);
 
-    // Close natively (or in mock)
     if (isExtension) {
       chrome.tabs.remove(group.tabIds);
     } else {
@@ -460,12 +448,11 @@ Rules for analysis:
       localStorage.setItem('tabaudit_mock_tabs', JSON.stringify(remainingMock));
     }
 
-    setInfoMessage(`📁 Workdesk '${group.name}' closed & saved to resting shelf.`);
-    setTimeout(() => setInfoMessage(null), 3000);
+    setInfoMessage(`📁 Workspace '${group.name}' archived & compressed.`);
+    setTimeout(() => setInfoMessage(null), 3500);
     await refreshAllData();
   };
 
-  // Restore sessional tabs back dynamically
   const handleRestoreSleepGroup = async (session: FrozenSession) => {
     if (isExtension) {
       session.tabs.forEach(t => {
@@ -488,8 +475,8 @@ Rules for analysis:
     setFrozenSessions(updatedFrozen);
     await saveToStorage('frozenSessions', updatedFrozen);
 
-    setInfoMessage(`✓ Restored '${session.name}' workspace successfully!`);
-    setTimeout(() => setInfoMessage(null), 3000);
+    setInfoMessage(`✓ Restored '${session.name}' browser workspace.`);
+    setTimeout(() => setInfoMessage(null), 3500);
     await refreshAllData();
   };
 
@@ -497,11 +484,10 @@ Rules for analysis:
     const updatedFrozen = frozenSessions.filter(s => s.id !== sessionId);
     setFrozenSessions(updatedFrozen);
     await saveToStorage('frozenSessions', updatedFrozen);
-    setInfoMessage('✓ Resting workdesk deleted.');
-    setTimeout(() => setInfoMessage(null), 2500);
+    setInfoMessage('✓ Workspace discard complete.');
+    setTimeout(() => setInfoMessage(null), 3000);
   };
 
-  // Spawn clutter to immediately experience the audit dashboard inside AI Studio Web iframe
   const handleSpawnClutter = async () => {
     const addedTabs: Tab[] = [
       { id: Date.now() + 1, title: 'Tailwind CSS Layout Guidelines', url: 'https://tailwindcss.com/docs/flexbox', index: tabs.length },
@@ -520,12 +506,11 @@ Rules for analysis:
       localStorage.setItem('tabaudit_mock_tabs', JSON.stringify(updated));
     }
     
-    setInfoMessage('✦ Spawned 4 mock tabs! Click Audit to cluster.');
-    setTimeout(() => setInfoMessage(null), 3000);
+    setInfoMessage('✦ Injected 4 messy sessional tabs.');
+    setTimeout(() => setInfoMessage(null), 3500);
     await refreshAllData();
   };
 
-  // Ungroup tab
   const handleUngroupTab = async (tabId: number) => {
     if (isExtension && chrome.tabs.ungroup) {
       chrome.tabs.ungroup(tabId);
@@ -540,7 +525,6 @@ Rules for analysis:
     await refreshAllData();
   };
 
-  // General state scores
   const scoreStats = tabs.map(t => {
     const time = tabTimestamps[String(t.id)] || Date.now();
     return calcStaleScore(t.index, time);
@@ -566,94 +550,78 @@ Rules for analysis:
   });
 
   return (
-    <div id="tabaudit-popup-wrapper" className="w-[450px] min-h-[550px] max-h-[600px] bg-[#07080B] text-[#E2E8F0] font-sans antialiased flex flex-col overflow-hidden relative border border-[#1A1D2E]/50">
+    <div id="tabaudit-popup-wrapper" className="w-[450px] min-h-[550px] max-h-[600px] bg-[#0B0C10] text-[#E2E8F0] font-sans antialiased flex flex-col overflow-hidden relative border border-white/[0.04]">
       
-      {/* Sleek Gradient Accent Background Header */}
-      <div className="absolute top-0 left-0 w-full h-[150px] bg-gradient-to-b from-[#8B5CF6]/15 to-transparent pointer-events-none" />
+      {/* Sleek Gradient Accent Background Header: Premium Developer Style */}
+      <div className="absolute top-0 left-0 w-full h-[180px] bg-gradient-to-b from-[#6366F1]/12 via-[#6366F1]/03 to-transparent pointer-events-none" />
 
-      {/* ⚙️ COMPACT HEADER BAR */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[#1A1D2F] bg-[#0E101A]/90 backdrop-blur-md relative z-20 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-[#8B5CF6] rounded-lg flex items-center justify-center shadow-lg shadow-[#8B5CF6]/20">
-            <Sparkles className="w-3.5 h-3.5 text-white" />
+      {/* HEADER BAR */}
+      <header className="flex items-center justify-between px-6 py-4.5 border-b border-white/[0.04] bg-[#0E1015]/80 backdrop-blur-md relative z-20 shrink-0 select-none">
+        <div className="flex items-center gap-2.5">
+          <div className="w-6.5 h-6.5 bg-[#6366F1] rounded-md flex items-center justify-center shadow-lg shadow-[#6366F1]/15 active:scale-95 transition-transform duration-150">
+            <Sparkles className="w-3.5 h-3.5 text-white" strokeWidth={2.2} />
           </div>
           <div>
-            <h1 className="text-sm font-extrabold text-white tracking-wide font-display">
-              TabAudit <span className="text-[#8B5CF6]">Assistant</span>
-            </h1>
-            <span className="text-[9px] text-[#64748B] uppercase font-mono tracking-widest block -mt-0.5">Manifest V3 Extension</span>
+            <span className="text-xs font-semibold text-white tracking-tight flex items-center gap-1.5 font-sans">
+              TabAudit <span className="text-[#6366F1] font-mono text-[10px] bg-[#6366F1]/10 px-1.5 py-[1px] rounded border border-[#6366F1]/25">M.V3</span>
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          {/* Grader / Local Sandbox controller tool badge */}
+        <div className="flex items-center gap-2">
           {!isExtension && (
             <button 
               onClick={handleSpawnClutter}
-              className="px-2.5 py-1 rounded bg-[#EA580C]/10 hover:bg-[#EA580C]/20 text-orange-400 border border-orange-500/10 text-[9px] font-bold uppercase transition-all flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1 rounded bg-[#10B981]/10 hover:bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/20 text-[9px] font-mono uppercase tracking-wider transition-all active:scale-[0.97] cursor-pointer"
               title="Spawn test clutter tabs in mock environment"
             >
-              <Plus className="w-2.5 h-2.5" />
-              Spawn Clutter
+              + Ingest Tabs
             </button>
           )}
 
           <button 
             onClick={() => setShowSettings(!showSettings)}
-            className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+            className={`p-1.5 rounded-md border transition-all active:scale-[0.96] cursor-pointer ${
               showSettings 
-                ? 'bg-[#8B5CF6]/20 border-[#8B5CF6]/40 text-[#8B5CF6]' 
-                : 'bg-white/5 border-transparent text-[#94A3B8] hover:text-white hover:bg-white/10'
+                ? 'bg-[#6366F1]/15 border-[#6366F1]/30 text-[#6366F1]' 
+                : 'bg-white/[0.03] border-white/[0.05] text-[#94A3B8] hover:text-white hover:bg-white/[0.06]'
             }`}
             title="Configure Gemini API Settings"
           >
-            <Settings2 className="w-3.5 h-3.5" />
+            <Settings2 className="w-3.5 h-3.5" strokeWidth={2} />
           </button>
         </div>
       </header>
 
-      {/* FEEDBACK BANNER */}
-      {infoMessage && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="bg-purple-950/40 border-b border-purple-500/20 px-4 py-1.5 text-[10px] text-cyan-400 font-mono flex items-center justify-between relative z-10 shrink-0"
-        >
-          <span className="truncate">{infoMessage}</span>
-          <button onClick={() => setInfoMessage(null)} className="text-[#8B5CF6] hover:text-white font-bold text-xs ml-2 uppercase">✕</button>
-        </motion.div>
-      )}
-
-      {/* ⚙️ DROP DOWN SETTINGS OPTIONS */}
+      {/* COMPACT DROP DOWN SETTINGS OPTIONS */}
       <AnimatePresence>
         {showSettings && (
           <motion.div 
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="bg-[#0E101A] border-b border-[#1A1D2F] p-4 text-[11px] text-[#94A3B8] relative z-20 overflow-hidden shrink-0"
+            className="bg-[#111218] border-b border-white/[0.04] p-5 text-[11px] text-[#94A3B8] relative z-20 overflow-hidden shrink-0"
           >
-            <div className="space-y-3 font-mono">
+            <div className="space-y-3.5 font-mono">
               <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-white font-bold uppercase tracking-wider text-[10px]">GEMINI 3.5 FLASH API KEY</label>
-                  <span className="text-[9px] text-[#475569]">Saved strictly in storage</span>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-white text-[9.5px] uppercase tracking-wider font-semibold">Gemini 3.5 Flash Token</span>
+                  <span className="text-[8.5px] text-[#475569] font-sans">Safe & local</span>
                 </div>
                 <input 
                   type="password" 
-                  placeholder="Enter Gemini API Key to unlock direct client-side AI..." 
+                  placeholder="Paste direct API key to unlock cognitive clustering..." 
                   value={settings.geminiApiKey}
                   onChange={(e) => {
                     const newSet = { ...settings, geminiApiKey: e.target.value };
                     setSettings(newSet);
                     saveToStorage('geminiApiKey', e.target.value);
                   }}
-                  className="w-full bg-[#05060A] border border-[#1A1E2F] rounded-lg p-2 text-xs text-white focus:outline-none placeholder-gray-600 focus:border-[#8B5CF6]"
+                  className="w-full bg-[#07080B] border border-white/[0.06] rounded-md p-2 text-[10.5px] text-white focus:outline-none focus:border-[#6366F1] placeholder-[#3F3F46]"
                 />
               </div>
 
-              <label className="flex items-start gap-2.5 cursor-pointer py-1 text-white hover:text-purple-300">
+              <label className="flex items-start gap-2.5 cursor-pointer py-1 text-white hover:text-[#6366F1] transition-colors">
                 <input 
                   type="checkbox"
                   checked={settings.aggressiveMemoryMode}
@@ -662,11 +630,11 @@ Rules for analysis:
                     setSettings(newSet);
                     saveToStorage('aggressiveMemoryMode', e.target.checked);
                   }}
-                  className="mt-0.5 rounded border-[#1D2132] text-[#8B5CF6] bg-[#05060A]"
+                  className="mt-0.5 rounded border-white/[0.08] text-[#6366F1] bg-[#07080B] focus:ring-0 cursor-pointer"
                 />
                 <div>
-                  <span className="font-bold text-[10px] block uppercase">Aggressive Memory Saver</span>
-                  <span className="text-[9px] text-[#64748B] block mt-0.5 leading-relaxed">Discard sessional tabs automatically after snoop timeouts.</span>
+                  <span className="font-sans font-medium text-[10px] block uppercase tracking-wide">Aggressive Standby Saver</span>
+                  <span className="text-[9px] text-[#64748B] block mt-0.5 font-sans leading-snug">Auto sleep background tabs following prolonged inactivity state.</span>
                 </div>
               </label>
             </div>
@@ -675,56 +643,53 @@ Rules for analysis:
       </AnimatePresence>
 
       {/* MAIN CONTAINER CONTENT SCROLL AREA */}
-      <main className="flex-1 overflow-y-auto px-4 py-3 space-y-4 relative z-10 max-h-[460px]">
+      <main className="flex-1 overflow-y-auto px-6 py-4.5 space-y-4.5 relative z-10 max-h-[460px]">
         
-        {/* ✦ 1. AI QUICK ORGANIZE MODULE */}
-        <section className="bg-gradient-to-r from-purple-950/15 to-indigo-950/15 border border-[#1C1F32] rounded-2xl p-3.5 space-y-2.5 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-1.5 opacity-15">
-            <Zap className="w-8 h-8 text-purple-400" />
+        {/* COGNITIVE AUDIT DRIVER MODULE */}
+        <section className="bg-[#13141B] border border-white/[0.04] rounded-xl p-5 space-y-3 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-1.5 opacity-5">
+            <Zap className="w-10 h-10 text-[#6366F1]" />
           </div>
 
           <div className="flex justify-between items-center">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[#A78BFA] text-xs font-bold uppercase tracking-wider font-mono">✦ AI Quick Organize</span>
-            </div>
-            <span className="text-[9px] font-mono text-[#64748B] font-semibold uppercase">{looseTabCount} loose tabs open</span>
+            <span className="text-[#6366F1] text-[9.5px] font-mono uppercase tracking-widest font-bold">✦ AI Quick Organize</span>
+            <span className="text-[8.5px] font-mono text-[#64748B] bg-white/[0.03] px-1.5 py-[2px] rounded border border-white/[0.04]">{looseTabCount} loose tabs</span>
           </div>
 
-          <p className="text-[10.5px] text-[#94A3B8] leading-relaxed">
-            Instant cluster audit! Groups related sessional tabs dynamically with <code className="text-[#A78BFA]">gemini-3.5-flash</code>. Leftover pages stay ungrouped.
+          <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+            Instantly cluster independent sessional items into active workspaces. Standalone pages will be deliberately left ungrouped.
           </p>
 
           <button 
             onClick={handleGroupRelatedNow}
             disabled={analyzing}
-            className="w-full py-2.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold shadow-lg shadow-[#8B5CF6]/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            className="w-full py-2 bg-[#6366F1] hover:bg-[#5558DD] active:scale-[0.98] text-white rounded-md text-[11px] font-medium tracking-tight shadow-md select-none transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
           >
-            <Layers className={`w-3.5 h-3.5 ${analyzing ? 'animate-spin' : ''}`} />
-            {analyzing ? 'Classifying Browser State...' : 'Group related tabs now'}
+            <Layers className={`w-3.5 h-3.5 ${analyzing ? 'animate-spin' : ''}`} strokeWidth={2} />
+            {analyzing ? 'Analyzing Clutter Architecture...' : 'Analyze and Group Related Tabs'}
           </button>
         </section>
 
-        {/* 🔍 SEARCH AND DYNAMIC WORKSPACES FEED */}
+        {/* WORKSPACES & TAB LISTINGS */}
         <section className="space-y-3">
-          <div className="flex items-center justify-between border-b border-[#1A1D2F] pb-1 select-none">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider font-mono">Dynamic Workspaces</span>
+          <div className="flex items-center justify-between border-b border-white/[0.03] pb-1.5 select-none">
+            <span className="text-[9.5px] font-mono text-[#64748B] uppercase tracking-widest">Workspace Feeds</span>
             <div className="relative flex items-center">
-              <Search className="w-3.5 h-3.5 text-[#475569] absolute left-2" />
+              <Search className="w-3 h-3 text-[#475569] absolute left-2" />
               <input 
                 type="text" 
-                placeholder="Search tabs..." 
+                placeholder="Search index..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-white/5 border border-transparent rounded-lg pl-7 pr-2 py-1 text-[10px] w-36 text-white focus:outline-none focus:border-[#8B5CF6]/40 transition-colors"
+                className="bg-white/[0.03] border border-white/[0.04] rounded pl-6 pr-2 py-0.5 text-[9.5px] w-32 text-white focus:outline-none focus:border-[#6366F1]/30 transition-all font-mono placeholder-[#3F3F46]"
               />
             </div>
           </div>
 
-          {/* CLUSTER GROUPS FEED */}
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {groups.length === 0 && tabs.length > 0 && looseTabCount === tabs.length && (
-              <div className="text-center py-4 bg-white/[0.01] border border-dashed border-white/5 rounded-2xl text-[10.5px] text-[#475569] font-mono">
-                No active groups. Click <strong className="text-purple-400">Group related tabs now</strong> to inspect.
+              <div className="text-center py-5 bg-white/[0.01] border border-dashed border-white/[0.04] rounded-xl text-[10px] text-[#475569] font-mono uppercase tracking-tight">
+                All pages are loose. Trigger Audit above.
               </div>
             )}
 
@@ -734,54 +699,56 @@ Rules for analysis:
               if (matchedTabs.length === 0) return null;
 
               return (
-                <div key={group.id} className="p-3 bg-[#0C0E17] border border-[#191D2F] rounded-xl space-y-2.5">
+                <div key={group.id} className="p-4 bg-[#111218] border border-white/[0.04] rounded-xl space-y-3 shadow-xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: mappedColor.hex }} />
-                      <span className="text-xs font-bold text-white tracking-wide uppercase font-mono">{group.name}</span>
-                      <span className="text-[9px] text-[#64748B] font-mono">({matchedTabs.length} tabs)</span>
+                      <span className="w-2 h-2 rounded-full relative" style={{ backgroundColor: mappedColor.hex }}>
+                        <span className="absolute inset-0 rounded-full animate-ping opacity-15" style={{ backgroundColor: mappedColor.hex }} />
+                      </span>
+                      <span className="text-xs font-semibold text-white tracking-tight uppercase font-mono">{group.name}</span>
+                      <span className="text-[9px] text-[#475569] font-mono">({matchedTabs.length} tabs)</span>
                     </div>
 
                     <button 
                       onClick={() => handleSleepGroup(group)}
-                      className="text-[9px] bg-purple-500/10 hover:bg-purple-500/20 text-[#A78BFA] border border-[#8B5CF6]/20 rounded-lg px-2 py-0.5 uppercase tracking-wide font-mono font-bold transition-all cursor-pointer"
+                      className="text-[8.5px] hover:bg-white/[0.04] text-white border border-white/[0.08] rounded px-2 py-0.5 uppercase tracking-wider font-mono transition-all active:scale-[0.96] cursor-pointer"
                       title="Snooze workspace and save to shelf"
                     >
-                      Snooze Desk
+                      Snooze Workspace
                     </button>
                   </div>
 
-                  <div className="space-y-1.5 border-l-2 border-white/5 pl-2">
+                  <div className="space-y-1.5 border-l border-white/[0.04] pl-3.5">
                     {matchedTabs.map(tab => {
                       const ageTime = tabTimestamps[String(tab.id)] || Date.now();
                       const score = calcStaleScore(tab.index, ageTime);
                       const sLabel = staleLabel(score);
 
                       return (
-                        <div key={tab.id} className="flex justify-between items-center text-[11px] group">
+                        <div key={tab.id} className="flex justify-between items-center text-[10.5px] group">
                           <div 
                             onClick={() => handleActivateTab(tab.id)}
-                            className="text-[#94A3B8] hover:text-white truncate max-w-[280px] cursor-pointer inline-flex items-center gap-1.5"
+                            className="text-[#94A3B8] hover:text-white truncate max-w-[270px] cursor-pointer inline-flex items-center gap-2 transition-all duration-150"
                           >
-                            <span className="text-[10px] shrink-0 font-mono tracking-tight bg-white/5 px-1 py-[1.5px] rounded text-gray-500 font-bold">idx {tab.index}</span>
-                            <span className={`truncate ${tab.active ? 'text-white font-bold underline decoration-purple-500 underline-offset-2' : ''}`}>
+                            <span className="text-[9px] font-mono text-[#475569] shrink-0 font-bold">#{tab.index}</span>
+                            <span className={`truncate ${tab.active ? 'text-white font-medium border-b border-[#6366F1]' : ''}`}>
                               {tab.title}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[8px] font-mono px-1 rounded uppercase tracking-tight font-bold scale-90" style={{ color: sLabel.color, backgroundColor: `${sLabel.color}10`, border: `1px solid ${sLabel.color}20` }}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[8px] font-mono px-1.5 py-[0.5px] rounded uppercase font-semibold" style={{ color: sLabel.color, backgroundColor: `${sLabel.color}10`, border: `1px solid ${sLabel.color}20` }}>
                               {sLabel.label}
                             </span>
                             <button 
                               onClick={() => handleUngroupTab(tab.id)}
-                              className="text-[8px] opacity-10 font-bold hover:opacity-100 px-1 py-[1px] bg-white/5 rounded text-[#94A3B8] hover:text-orange-400 font-mono scale-90"
-                              title="Remove from this workspace"
+                              className="text-[8px] opacity-0 group-hover:opacity-100 px-1 hover:text-white py-[0.5px] border border-white/[0.08] hover:bg-white/[0.02] bg-transparent rounded text-[#94A3B8] font-mono transition-all cursor-pointer"
+                              title="Remove from workspace"
                             >
                               Ungroup
                             </button>
                             <button 
                               onClick={() => handleCloseTab(tab.id)} 
-                              className="opacity-20 group-hover:opacity-100 hover:text-rose-400 text-gray-400 p-0.5 rounded transition-all cursor-pointer inline-block"
+                              className="opacity-0 group-hover:opacity-100 hover:text-rose-400 text-gray-400 p-0.5 rounded transition-all cursor-pointer"
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -794,15 +761,15 @@ Rules for analysis:
               );
             })}
 
-            {/* LOOSE UNGROUPED FEED */}
+            {/* UNGROUPED LOOSE ITEMS */}
             {looseTabCount > 0 && (
-              <div className="p-3 bg-[#06070B] border border-dashed border-[#151824] rounded-xl space-y-2">
-                <div className="flex justify-between items-center select-none pb-0.5 border-b border-[#141624]">
+              <div className="p-4 bg-[#0B0C10] border border-dashed border-white/[0.06] rounded-xl space-y-3">
+                <div className="flex justify-between items-center select-none pb-1.5 border-b border-white/[0.03]">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#3F3F46]" />
-                    <span className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wide font-mono">Ungrouped Loose Items</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#3F3F46]" />
+                    <span className="text-[9.5px] font-mono text-[#64748B] uppercase tracking-widest">Loose Items</span>
                   </div>
-                  <span className="text-[8.5px] bg-[#141624] py-0.5 px-1.5 rounded text-[#475569] font-mono font-bold uppercase">{looseTabCount} loose</span>
+                  <span className="text-[8px] bg-white/[0.03] border border-white/[0.04] py-[1px] px-1.5 rounded text-[#64748B] font-mono uppercase font-semibold">{looseTabCount} items</span>
                 </div>
 
                 <div className="space-y-1.5">
@@ -815,21 +782,21 @@ Rules for analysis:
                       <div key={tab.id} className="flex justify-between items-center text-[10.5px] group">
                         <div 
                           onClick={() => handleActivateTab(tab.id)}
-                          className="text-[#64748B] hover:text-[#A78BFA] truncate max-w-[310px] cursor-pointer inline-flex items-center gap-1.5"
+                          className="text-[#64748B] hover:text-[#A78BFA] truncate max-w-[310px] cursor-pointer inline-flex items-center gap-2 transition-all duration-150"
                         >
-                          <span className="text-[9px] font-mono bg-white/5 opacity-40 px-1 rounded font-bold">idx {tab.index}</span>
-                          <span className={`truncate ${tab.active ? 'text-[#E2E8F0] font-bold underline decoration-purple-500' : ''}`}>
+                          <span className="text-[9px] font-mono text-white/[0.15] font-bold">#{tab.index}</span>
+                          <span className={`truncate ${tab.active ? 'text-[#E2E8F0] font-medium border-b border-[#6366F1]' : ''}`}>
                             {tab.title}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[8px] font-mono px-1 rounded uppercase font-bold" style={{ color: sLabel.color, backgroundColor: `${sLabel.color}10`, border: `1px solid ${sLabel.color}20` }}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[8px] font-mono px-1.5 py-[0.5px] rounded uppercase font-semibold" style={{ color: sLabel.color, backgroundColor: `${sLabel.color}10`, border: `1px solid ${sLabel.color}20` }}>
                             {sLabel.label}
                           </span>
                           <button 
                             onClick={() => handleCloseTab(tab.id)} 
-                            className="opacity-10 group-hover:opacity-100 hover:text-rose-400 text-gray-400 p-0.5 cursor-pointer inline-block"
-                            title="Close tab natively"
+                            className="opacity-0 group-hover:opacity-100 hover:text-rose-400 text-gray-400 p-0.5 cursor-pointer transition-all"
+                            title="Discard tab"
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -843,40 +810,40 @@ Rules for analysis:
           </div>
         </section>
 
-        {/* 📁 SAVED RESTING WORKSPACES ARCHIVE SHELF */}
-        <section className="bg-white/[0.01] border border-[#161928] rounded-xl p-3 space-y-2.5">
-          <div className="flex items-center gap-2 border-b border-white/5 pb-1 select-none">
-            <FolderOpen className="w-3.5 h-3.5 text-[#8B5CF6]" />
-            <h3 className="text-[10px] font-extrabold text-[#94A3B8] uppercase tracking-wider font-mono">
-              Saved Resting Workspaces ({frozenSessions.length})
-            </h3>
+        {/* SAVED RESTING WORKSPACES ARCHIVE SHELF */}
+        <section className="bg-white/[0.01] border border-white/[0.04] rounded-xl p-4.5 space-y-3.5">
+          <div className="flex items-center gap-2 border-b border-white/[0.03] pb-1.5 select-none">
+            <FolderOpen className="w-3.5 h-3.5 text-[#6366F1]" strokeWidth={2} />
+            <span className="text-[9.5px] font-mono text-[#94A3B8] uppercase tracking-widest leading-none">
+              Resting Desks ({frozenSessions.length})
+            </span>
           </div>
 
           {frozenSessions.length === 0 ? (
-            <div className="text-center py-4 text-[10px] text-[#475569] font-mono uppercase">
-              Resting archive shelf is empty.
+            <div className="text-center py-5 text-[9px] text-[#475569] font-mono uppercase tracking-wider">
+              No compressed workspaces stored.
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {frozenSessions.map(session => (
-                <div key={session.id} className="bg-[#090B12] p-2.5 rounded-lg border border-white/5 flex items-center justify-between gap-3">
-                  <div className="truncate min-w-0 select-none leading-tight">
-                    <span className="text-xs font-bold text-white block truncate">📁 {session.name}</span>
+                <div key={session.id} className="bg-[#111218] p-3 rounded-lg border border-white/[0.04] flex items-center justify-between gap-3 shadow-xs">
+                  <div className="truncate min-w-0 select-none leading-normal">
+                    <span className="text-[11px] font-medium text-white block truncate">📁 {session.name}</span>
                     <span className="text-[9px] text-[#64748B] font-mono block mt-0.5">
-                      {session.tabs.length} sessional tabs · Freed ~{session.tabs.length * 95}MB RAM memory
+                      {session.tabs.length} tabs · Freed ~{session.tabs.length * 95}MB Memory
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <button 
                       onClick={() => handleRestoreSleepGroup(session)} 
-                      className="px-2 py-0.5 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white text-[9px] font-bold rounded-md transition-all cursor-pointer"
+                      className="px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] hover:text-white text-[9px] font-mono uppercase tracking-wider text-[#94A3B8] border border-white/[0.08] rounded transition-all cursor-pointer active:scale-[0.96]"
                     >
                       Restore
                     </button>
                     <button 
                       onClick={() => handleDeleteSavedSession(session.id)}
-                      className="p-1 hover:bg-rose-500/10 text-rose-400 rounded transition-colors cursor-pointer"
+                      className="p-1 hover:bg-rose-500/10 text-rose-400/80 hover:text-rose-400 rounded transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -889,26 +856,43 @@ Rules for analysis:
 
       </main>
 
-      {/* 📊 REALTIME RAM DIAGNOSTICS BAR */}
-      <footer className="shrink-0 bg-[#0E101A] border-t border-[#1C1F32] p-3.5 select-none relative z-10 font-mono">
-        <div className="flex items-center justify-between text-[10px] mb-2 font-bold select-none text-[#64748B]">
-          <span>RAM DIAGNOSTICS</span>
-          <span className="text-emerald-400">HEALTH LEVEL: {healthRatio}% CLEAN</span>
+      {/* FEEDBACK BOTTOM BLOCK TOAST PANEL */}
+      <AnimatePresence>
+        {infoMessage && (
+          <div className="absolute bottom-[65px] left-1/2 transform -translate-x-1/2 z-30 w-[calc(100%-48px)]">
+            <motion.div 
+              initial={{ opacity: 0, y: 15, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              className="bg-[#111218] border border-white/[0.08] p-3 rounded-xl shadow-2xl flex items-center justify-between text-[10.5px] font-mono text-white tracking-tight"
+            >
+              <span className="truncate flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-[#10B981] inline" /> {infoMessage}</span>
+              <button onClick={() => setInfoMessage(null)} className="text-[#64748B] hover:text-white uppercase font-bold text-[9px] border-l border-white/[0.08] pl-2.5 ml-2">Close</button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* FOOTER METRICS DIAGNOSTICS */}
+      <footer className="shrink-0 bg-[#0E0F14] border-t border-white/[0.04] p-4.5 select-none relative z-10 font-mono">
+        <div className="flex items-center justify-between text-[9px] mb-2 text-[#64748B] uppercase tracking-wider">
+          <span>Sessional Heat Density</span>
+          <span className="text-[#10B981]">Health Status: {healthRatio}% Optimal</span>
         </div>
 
-        {/* Dynamic horizontal category meter */}
-        <div className="h-2 w-full bg-[#05060A] rounded-full overflow-hidden flex mb-2.5 border border-white/5">
-          <div className="h-full bg-emerald-500" style={{ width: `${tabs.length > 0 ? (activeCount / tabs.length) * 100 : 0}%` }} title={`Active: ${activeCount}`} />
-          <div className="h-full bg-blue-500" style={{ width: `${tabs.length > 0 ? (warmCount / tabs.length) * 100 : 0}%` }} title={`Warm: ${warmCount}`} />
-          <div className="h-full bg-amber-500" style={{ width: `${tabs.length > 0 ? (staleCount / tabs.length) * 100 : 0}%` }} title={`Stale: ${staleCount}`} />
-          <div className="h-full bg-rose-500" style={{ width: `${tabs.length > 0 ? (deadCount / tabs.length) * 100 : 0}%` }} title={`Dead Weight: ${deadCount}`} />
+        {/* Segmented heat map */}
+        <div className="h-1.5 w-full bg-[#07080B] rounded-full overflow-hidden flex mb-3 border border-white/[0.04]">
+          <div className="h-full bg-[#10B981] transition-all" style={{ width: `${tabs.length > 0 ? (activeCount / tabs.length) * 100 : 0}%` }} title={`Active: ${activeCount}`} />
+          <div className="h-full bg-[#3B82F6] transition-all" style={{ width: `${tabs.length > 0 ? (warmCount / tabs.length) * 100 : 0}%` }} title={`Warm: ${warmCount}`} />
+          <div className="h-full bg-[#F59E0B] transition-all" style={{ width: `${tabs.length > 0 ? (staleCount / tabs.length) * 100 : 0}%` }} title={`Stale: ${staleCount}`} />
+          <div className="h-full bg-[#EF4444] transition-all" style={{ width: `${tabs.length > 0 ? (deadCount / tabs.length) * 100 : 0}%` }} title={`Discard Candidate: ${deadCount}`} />
         </div>
 
         <div className="flex items-center justify-between text-[9px] text-[#475569]">
-          <span className="flex items-center gap-1.5 uppercase font-bold">
-            <Clock className="w-3 h-3 text-[#64748B]" /> Stale tabs total: {totalIdleCount}
+          <span className="flex items-center gap-1 text-[#64748B] uppercase tracking-wider font-semibold">
+            <Clock className="w-3 h-3 text-[#64748B]" /> Idle State: {totalIdleCount}
           </span>
-          <span className="text-[#A78BFA] font-bold">SAVED LAPTOP CACHE: ~{ramSavedEstimate}MB</span>
+          <span className="text-[#10B981]/90 uppercase tracking-widest font-semibold bg-[#10B981]/5 border border-[#10B981]/15 px-1.5 py-[1px] rounded">Compressed Cache: ~{ramSavedEstimate}MB</span>
         </div>
       </footer>
 
