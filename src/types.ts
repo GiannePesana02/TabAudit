@@ -18,6 +18,7 @@ export interface Group {
 export interface FrozenSession {
   id: string;
   name: string;
+  color?: string;
   frozenAt: number;
   tabs: {
     id: number;

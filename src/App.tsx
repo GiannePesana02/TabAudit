@@ -515,6 +515,7 @@ Rules for analysis:
     const newSession: FrozenSession = {
       id: `frozen-${Date.now()}`,
       name: group.name,
+      color: group.color,
       frozenAt: Date.now(),
       tabs: tabsToSnooze.map(t => ({
         id: t.id,
@@ -544,11 +545,76 @@ Rules for analysis:
     await refreshAllData();
   };
 
+  const completeRestoringStorage = async (session: FrozenSession, nativeGroupId?: any, restoredIds: number[] = []) => {
+    const updatedFrozen = frozenSessions.filter(s => s.id !== session.id);
+    setFrozenSessions(updatedFrozen);
+    await saveToStorage('frozenSessions', updatedFrozen);
+
+    if (nativeGroupId !== undefined && restoredIds.length > 0) {
+      const storedGroups = await loadFromStorage<Group[]>('groups', []);
+      const newGroup: Group = {
+        id: String(nativeGroupId),
+        name: session.name,
+        color: session.color || 'purple',
+        tabIds: restoredIds
+      };
+      
+      const cleanedGroups = storedGroups.map(g => ({
+        ...g,
+        tabIds: g.tabIds.filter(id => !restoredIds.includes(id))
+      })).filter(g => g.tabIds.length > 0);
+
+      const finalGroups = [...cleanedGroups, newGroup];
+      setGroups(finalGroups);
+      await saveToStorage('groups', finalGroups);
+    }
+
+    setInfoMessage(`✓ Restored '${session.name}' browser workspace.`);
+    setTimeout(() => setInfoMessage(null), 3500);
+    await refreshAllData();
+  };
+
   const handleRestoreSleepGroup = async (session: FrozenSession) => {
     if (isExtension) {
-      session.tabs.forEach(t => {
-        chrome.tabs.create({ url: t.url });
-      });
+      try {
+        const restoredIds: number[] = [];
+        
+        // Sequentially create the tabs so we can perfectly track and pair tab IDs
+        for (const t of session.tabs) {
+          const tabId = await new Promise<number>((resolve) => {
+            chrome.tabs.create({ url: t.url, active: false }, (newTab) => {
+              if (newTab && newTab.id !== undefined) {
+                resolve(newTab.id);
+              } else {
+                resolve(0);
+              }
+            });
+          });
+          if (tabId) {
+            restoredIds.push(tabId);
+          }
+        }
+
+        if (restoredIds.length > 0 && chrome.tabs.group) {
+          chrome.tabs.group({ tabIds: restoredIds }, (newNativeGroupId) => {
+            if (chrome.tabGroups?.update) {
+              const validColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+              const originalColor = session.color || 'purple';
+              const targetCol = validColors.includes(originalColor) ? originalColor : 'purple';
+              chrome.tabGroups.update(newNativeGroupId, { title: session.name, color: targetCol as any }, () => {
+                completeRestoringStorage(session, newNativeGroupId, restoredIds);
+              });
+            } else {
+              completeRestoringStorage(session, newNativeGroupId, restoredIds);
+            }
+          });
+        } else {
+          completeRestoringStorage(session, undefined, []);
+        }
+      } catch (err) {
+        console.error('Failed to natively restore group:', err);
+        completeRestoringStorage(session, undefined, []);
+      }
     } else {
       const currentMock: Tab[] = JSON.parse(localStorage.getItem('tabaudit_mock_tabs') || '[]');
       const newlyOpened: Tab[] = session.tabs.map((t, idx) => ({
@@ -560,15 +626,27 @@ Rules for analysis:
       }));
       const updatedMock = [...currentMock, ...newlyOpened];
       localStorage.setItem('tabaudit_mock_tabs', JSON.stringify(updatedMock));
+
+      const mockGroupId = `group-${Date.now()}`;
+      const newMockGroup: Group = {
+        id: mockGroupId,
+        name: session.name,
+        color: session.color || 'purple',
+        tabIds: newlyOpened.map(o => o.id)
+      };
+
+      const storedGroups = await loadFromStorage<Group[]>('groups', []);
+      const updatedGroups = [...storedGroups, newMockGroup];
+      await saveToStorage('groups', updatedGroups);
+
+      const updatedFrozen = frozenSessions.filter(s => s.id !== session.id);
+      setFrozenSessions(updatedFrozen);
+      await saveToStorage('frozenSessions', updatedFrozen);
+
+      setInfoMessage(`✓ Restored '${session.name}' browser workspace.`);
+      setTimeout(() => setInfoMessage(null), 3500);
+      await refreshAllData();
     }
-
-    const updatedFrozen = frozenSessions.filter(s => s.id !== session.id);
-    setFrozenSessions(updatedFrozen);
-    await saveToStorage('frozenSessions', updatedFrozen);
-
-    setInfoMessage(`✓ Restored '${session.name}' browser workspace.`);
-    setTimeout(() => setInfoMessage(null), 3500);
-    await refreshAllData();
   };
 
   const handleDeleteSavedSession = async (sessionId: string) => {
