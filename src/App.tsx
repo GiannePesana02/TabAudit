@@ -347,9 +347,18 @@ Existing groups:
 ${JSON.stringify(groups || [], null, 2)}
 
 Rules for analysis:
-1. "suggestedGroups": Suggest new groups for tabs NOT already in an existing group. Group names should be 2-4 short, descriptive words (e.g. "React Tutorials", "Travel Options", "Bug Tracking"). Color must be one of: "blue", "green", "red", "yellow", "purple", "pink", "cyan".
+1. "suggestedGroups": Suggest new project-based or topic-based groups for tabs NOT already in an existing group. 
+   - CRITICAL: IGNORE superficial app-type or domain-level similarities (do NOT cluster by domain into things like "ChatGPT Desk", "Google Docs Desk", or "YouTube Desk").
+   - FORCE PROJECT-BASED COHESION: Group tabs according to their actual topic, task intent, or active project by cross-referencing descriptive sub-strings in the page Title alongside path variables/keywords in the URL.
+   - ALLOW CROSS-DOMAIN CLUSTERING: Groups SHOULD contain mixed domains (e.g., a single group named "E-Commerce Re-design" should blend a Figma link, a GitHub issue, a ChatGPT conversation, and a YouTube research video if they clearly share a unified project topic).
+   - DEFINE CRISP WORKSPACE NAMES: Group names must represent the overarching professional project or topic domain (e.g., "Deep Learning Research", "Q3 Budget Review", "Interior Stage Design") instead of technical utility categories. Keep names to 2-4 short, elegant words.
+   - Color selection must be one of: "blue", "green", "red", "yellow", "purple", "pink", "cyan".
+
 2. "freezeSuggestions": Suggest freezing groups or a set of tabs if they have 3+ tabs and contain tabs that are likely stale/idle/buried and non-essential. Give a brief, compelling one-sentence reason including typical RAM savings (e.g., "5 idle tabs · ~400MB freed").
-3. "ungroupedTabIds": Identify any tab IDs that don't fit any group.
+
+3. "ungroupedTabIds": Identify any tab IDs that don't fit any active project.
+   - RETAIN STANDALONE MISCELLANEOUS PROTECTION: If a tab is a true standalone, miscellaneous link with zero project/topic overlap with other active tabs (such as a random news search, a general article, or a personal email check), place its ID strictly in "ungroupedTabIds" so it remains clean and loose on the main tab bar.
+
 4. If no meaningful suggestions can be made, return empty arrays.
 5. NEVER suggest freezing the currently active tab or tabs that have been active recently.
 `;
@@ -358,7 +367,7 @@ Rules for analysis:
           model: 'gemini-3.5-flash',
           contents: prompt,
           config: {
-            systemInstruction: 'You are a professional tab manager assistant. Analyze ONLY the provided loose ungrouped tabs. If a tab is a standalone page with no clear relationship to other loose tabs (like a random search or a generic article), place its ID strictly in the \'ungroupedTabIds\' array. Do not generate a group recommendation for it. Analyze the tab lists and return a crisp JSON summary of suggestions without any markdown styling or code blocks.',
+            systemInstruction: 'You are a professional tab manager assistant specializing in cross-domain project cohesion. Analyze instructions and open tabs. Group tabs based on their true semantic task or project relationships using titles and URL context, and completely avoid superficial domain name groupings. Do not suggest groups for standalone, unrelated miscellaneous tabs—they must be returned in ungroupedTabIds.',
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
