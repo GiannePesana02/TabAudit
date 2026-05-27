@@ -187,7 +187,8 @@ export default function App() {
     const suggested: SuggestedGroup[] = [];
     const ungrouped: number[] = [];
 
-    const tabsWithoutGroup = tabs.filter(t => !groups.some(g => g.tabIds.includes(t.id)));
+    // Completely ignore tabs that already have a native groupId or are already in a state group
+    const tabsWithoutGroup = tabs.filter(t => t.groupId === undefined && !groups.some(g => g.tabIds.includes(t.id)));
 
     // Group by hostname / brand
     const domainGroups: Record<string, Tab[]> = {};
@@ -250,7 +251,9 @@ export default function App() {
           apiKey: apiKeyToUse
         });
 
-        const tabSummary = tabs.map((t) => ({
+        // Filter out any tabs that already have a native groupId assigned (i.e., t.groupId !== undefined) or are in a state group
+        const looseTabsOnly = tabs.filter(t => t.groupId === undefined && !groups.some(g => g.tabIds.includes(t.id)));
+        const tabSummary = looseTabsOnly.map((t) => ({
           id: t.id,
           title: t.title,
           url: t.url,
@@ -278,7 +281,7 @@ Rules for analysis:
           model: 'gemini-3.5-flash',
           contents: prompt,
           config: {
-            systemInstruction: 'You are a professional tab manager assistant. Analyze the tab lists and return a crisp JSON summary of suggestions without any markdown styling or code blocks.',
+            systemInstruction: 'You are a professional tab manager assistant. Analyze ONLY the provided loose ungrouped tabs. If a tab is a standalone page with no clear relationship to other loose tabs (like a random search or a generic article), place its ID strictly in the \'ungroupedTabIds\' array. Do not generate a group recommendation for it. Analyze the tab lists and return a crisp JSON summary of suggestions without any markdown styling or code blocks.',
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
