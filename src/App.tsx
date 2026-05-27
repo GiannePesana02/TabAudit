@@ -66,6 +66,13 @@ export default function App() {
 
   const isExtension = typeof chrome !== 'undefined' && chrome.tabs && chrome.storage && chrome.storage.local;
 
+  const isTabGrouped = (tab: Tab, currentGroups: Group[] = groups) => {
+    if (isExtension) {
+      return tab.groupId !== undefined;
+    }
+    return currentGroups.some(g => g.tabIds.includes(tab.id));
+  };
+
   const groupColors = [
     { name: 'blue', hex: '#60A5FA', fontColor: 'text-blue-400', bannerBg: 'bg-blue-500/10', borderStyle: 'border-blue-500/15' },
     { name: 'green', hex: '#34D399', fontColor: 'text-emerald-400', bannerBg: 'bg-emerald-500/10', borderStyle: 'border-emerald-500/15' },
@@ -86,6 +93,38 @@ export default function App() {
       chrome.action?.setBadgeBackgroundColor?.({ color: '#6366F1' });
     }
   }, [tabs]);
+
+  useEffect(() => {
+    if (isExtension) {
+      const listener = () => {
+        refreshAllData();
+      };
+
+      chrome.tabs.onCreated?.addListener(listener);
+      chrome.tabs.onUpdated?.addListener(listener);
+      chrome.tabs.onRemoved?.addListener(listener);
+      chrome.tabs.onMoved?.addListener(listener);
+      chrome.tabs.onAttached?.addListener(listener);
+      chrome.tabs.onDetached?.addListener(listener);
+      
+      chrome.tabGroups?.onCreated?.addListener(listener);
+      chrome.tabGroups?.onUpdated?.addListener(listener);
+      chrome.tabGroups?.onRemoved?.addListener(listener);
+
+      return () => {
+        chrome.tabs.onCreated?.removeListener(listener);
+        chrome.tabs.onUpdated?.removeListener(listener);
+        chrome.tabs.onRemoved?.removeListener(listener);
+        chrome.tabs.onMoved?.removeListener(listener);
+        chrome.tabs.onAttached?.removeListener(listener);
+        chrome.tabs.onDetached?.removeListener(listener);
+
+        chrome.tabGroups?.onCreated?.removeListener(listener);
+        chrome.tabGroups?.onUpdated?.removeListener(listener);
+        chrome.tabGroups?.onRemoved?.removeListener(listener);
+      };
+    }
+  }, [isExtension]);
 
   const loadFromStorage = <T,>(key: string, defaultValue: T): Promise<T> => {
     return new Promise((resolve) => {
@@ -148,7 +187,7 @@ export default function App() {
         }
       }
 
-      const storedGroups = await loadFromStorage<Group[]>('groups', []);
+      let storedGroups = await loadFromStorage<Group[]>('groups', []);
       const storedFrozen = await loadFromStorage<FrozenSession[]>('frozenSessions', []);
       const storedTimestamps = await loadFromStorage<Record<string, number>>('tabTimestamps', {});
       const apiKey = await loadFromStorage<string>('geminiApiKey', '');
@@ -166,6 +205,49 @@ export default function App() {
       });
       if (updatedFlag) {
         await saveToStorage('tabTimestamps', updatedTimestamps);
+      }
+
+      // Synchronize native tab groups dynamically with Chrome context if and only if API exists
+      if (isExtension) {
+        const nativeGroupsList = await new Promise<any[]>((resolve) => {
+          if (chrome.tabGroups && chrome.tabGroups.query) {
+            chrome.tabGroups.query({}, (list) => {
+              resolve(list || []);
+            });
+          } else {
+            resolve([]);
+          }
+        });
+
+        const syncedGroups: Group[] = [];
+        for (const nativeGroup of nativeGroupsList) {
+          const groupIdStr = String(nativeGroup.id);
+          const nativeColor = nativeGroup.color || 'purple';
+
+          let mappedColor = 'purple';
+          if (['blue', 'green', 'red', 'yellow', 'purple', 'pink', 'cyan'].includes(nativeColor)) {
+            mappedColor = nativeColor;
+          } else if (nativeColor === 'orange') {
+            mappedColor = 'yellow';
+          } else if (nativeColor === 'grey') {
+            mappedColor = 'blue';
+          }
+
+          const associatedTabIds = fetchedTabs
+            .filter(t => t.groupId === groupIdStr)
+            .map(t => t.id);
+
+          if (associatedTabIds.length > 0) {
+            syncedGroups.push({
+              id: groupIdStr,
+              name: nativeGroup.title || `Workspace ${nativeGroup.id}`,
+              color: mappedColor,
+              tabIds: associatedTabIds
+            });
+          }
+        }
+        storedGroups = syncedGroups;
+        await saveToStorage('groups', storedGroups);
       }
 
       setTabs(fetchedTabs);
@@ -186,7 +268,7 @@ export default function App() {
     const suggested: SuggestedGroup[] = [];
     const ungrouped: number[] = [];
 
-    const tabsWithoutGroup = tabs.filter(t => t.groupId === undefined && !groups.some(g => g.tabIds.includes(t.id)));
+    const tabsWithoutGroup = tabs.filter(t => !isTabGrouped(t, groups));
 
     const domainGroups: Record<string, Tab[]> = {};
     tabsWithoutGroup.forEach(tab => {
@@ -247,7 +329,7 @@ export default function App() {
           apiKey: apiKeyToUse
         });
 
-        const looseTabsOnly = tabs.filter(t => t.groupId === undefined && !groups.some(g => g.tabIds.includes(t.id)));
+        const looseTabsOnly = tabs.filter(t => !isTabGrouped(t, groups));
         const tabSummary = looseTabsOnly.map((t) => ({
           id: t.id,
           title: t.title,
@@ -542,7 +624,7 @@ Rules for analysis:
     : 100;
 
   const ramSavedEstimate = frozenSessions.reduce((acc, curr) => acc + (curr.tabs.length * 95), 0);
-  const looseTabCount = tabs.filter(t => !groups.some(g => g.tabIds.includes(t.id))).length;
+  const looseTabCount = tabs.filter(t => !isTabGrouped(t, groups)).length;
 
   const filteredTabs = tabs.filter(t => {
     const q = searchQuery.toLowerCase();
@@ -773,7 +855,7 @@ Rules for analysis:
                 </div>
 
                 <div className="space-y-1.5">
-                  {filteredTabs.filter(t => !groups.some(g => g.tabIds.includes(t.id))).map((tab) => {
+                  {filteredTabs.filter(t => !isTabGrouped(t, groups)).map((tab) => {
                     const ageTime = tabTimestamps[String(tab.id)] || Date.now();
                     const score = calcStaleScore(tab.index, ageTime);
                     const sLabel = staleLabel(score);
